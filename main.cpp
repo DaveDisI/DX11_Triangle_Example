@@ -3,7 +3,7 @@
 #include <d3dcompiler.h>
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)  {  
-    if(message == WM_DESTROY || message == WM_CLOSE){
+    if(message == WM_DESTROY || message == WM_CLOSE || wParam == VK_ESCAPE){
         PostQuitMessage(0);
         return 0;
     }
@@ -52,14 +52,28 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     float clearColor[] = { 0.3, 0.5, 0.9, 1.0 };
 
     //buffers
+    float modelMat[16] = {
+        0.5, 0, 0, 0,
+        0, 0.5, 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1,
+    };
+
+    ID3D11Buffer* uniformBuffer = 0;
+    CD3D11_BUFFER_DESC uniformBufferDescriptor(sizeof(float) * 16, D3D11_BIND_CONSTANT_BUFFER);
+    D3D11_SUBRESOURCE_DATA bufferData = {};
+    bufferData.pSysMem = modelMat;
+    device->CreateBuffer(&uniformBufferDescriptor, &bufferData, &uniformBuffer);
+    deviceContext->VSSetConstantBuffers(0, 1, &uniformBuffer);
+
     float vertices[] = {
         -1, -1, 1, 0, 0,
-         0,  1, 0, 1, 0,
-         1, -1, 0, 0, 1
+        -1,  1, 0, 1, 0,
+         1,  1, 0, 0, 1,
+         1, -1, 1, 1, 0,
     };
 
     ID3D11Buffer* vertexBuffer = 0;
-
     CD3D11_BUFFER_DESC vertexBufferDescriptor(sizeof(vertices), D3D11_BIND_VERTEX_BUFFER);
     D3D11_SUBRESOURCE_DATA vertexData = {};
     vertexData.pSysMem = vertices;
@@ -68,6 +82,16 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     UINT stride = sizeof(float) * 5;
     UINT offset = 0;
     deviceContext->IASetVertexBuffers(0, 1, &vertexBuffer, &stride, &offset);
+
+    unsigned short indices[] = {
+        0, 1, 2, 2, 3, 0
+    };
+    ID3D11Buffer* indexBuffer = 0;
+    CD3D11_BUFFER_DESC indexBufferDescriptor(sizeof(indices), D3D11_BIND_INDEX_BUFFER);
+    D3D11_SUBRESOURCE_DATA indexData = {};
+    indexData.pSysMem = indices;
+    device->CreateBuffer(&indexBufferDescriptor, &indexData, &indexBuffer);
+    deviceContext->IASetIndexBuffer(indexBuffer, DXGI_FORMAT_R16_UINT, 0);
 
     ID3DBlob* vertexShaderBlob = 0;
     ID3DBlob* errorBlob = 0;
@@ -96,7 +120,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     ID3D11InputLayout* inputLayout = 0;
     D3D11_INPUT_ELEMENT_DESC layout[] = {
         { "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-        { "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, sizeof(float) * 2 /*D3D11_APPEND_ALIGNED_ELEMENT*/, D3D11_INPUT_PER_VERTEX_DATA, 0 }
+        { "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, sizeof(float) * 2, D3D11_INPUT_PER_VERTEX_DATA, 0 }
     };
 
     device->CreateInputLayout(layout, 2, vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize(), &inputLayout);
@@ -106,6 +130,30 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
     CD3D11_VIEWPORT viewPort(0.0f, 0.0f, (float)backBufferDesc.Width, (float)backBufferDesc.Height);
     deviceContext->RSSetViewports(1, &viewPort);
+
+    unsigned char textureBits[] = {
+        255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255,
+        0, 0, 255, 255, 255, 0, 0, 255, 0, 255, 0, 255,
+        255, 0, 255, 255, 0, 255, 255, 255, 255, 255, 0, 255,
+    };
+
+    D3D11_SUBRESOURCE_DATA textureSubData = {};
+    textureSubData.pSysMem = textureBits;
+    textureSubData.SysMemPitch = sizeof(unsigned char) * 12;
+    textureSubData.SysMemSlicePitch = 0;
+
+    ID3D11Texture2D* texture;             
+    D3D11_SAMPLER_DESC samplerDescriptor = {};
+
+    D3D11_TEXTURE2D_DESC textureDescriptor = {};
+    textureDescriptor.Width = 3;
+    textureDescriptor.Height = 3;
+    textureDescriptor.MipLevels = 1;
+    textureDescriptor.ArraySize = 1;
+    textureDescriptor.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    textureDescriptor.Usage = D3D11_USAGE_DEFAULT;
+
+    device->CreateTexture2D(&textureDescriptor, &textureSubData, &texture);
 
     MSG msg = {};
     while(1){
@@ -117,12 +165,11 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
                 break;
             }
         }
-
         
         deviceContext->ClearRenderTargetView(renderTargetView, clearColor);
 
         //draw stuff
-        deviceContext->Draw(3, 0);
+        deviceContext->DrawIndexed(6, 0, 0);
 
         swapChain->Present(1, 0);
     }
