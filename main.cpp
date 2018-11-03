@@ -67,10 +67,10 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     deviceContext->VSSetConstantBuffers(0, 1, &uniformBuffer);
 
     float vertices[] = {
-        -1, -1, 1, 0, 0,
-        -1,  1, 0, 1, 0,
-         1,  1, 0, 0, 1,
-         1, -1, 1, 1, 0,
+        -1, -1, 0, 1,
+        -1,  1, 0, 0,
+         1,  1, 1, 0,
+         1, -1, 1, 1,
     };
 
     ID3D11Buffer* vertexBuffer = 0;
@@ -79,7 +79,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     vertexData.pSysMem = vertices;
 
     device->CreateBuffer(&vertexBufferDescriptor, &vertexData, &vertexBuffer);
-    UINT stride = sizeof(float) * 5;
+    UINT stride = sizeof(float) * 4;
     UINT offset = 0;
     deviceContext->IASetVertexBuffers(0, 1, &vertexBuffer, &stride, &offset);
 
@@ -120,7 +120,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     ID3D11InputLayout* inputLayout = 0;
     D3D11_INPUT_ELEMENT_DESC layout[] = {
         { "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-        { "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, sizeof(float) * 2, D3D11_INPUT_PER_VERTEX_DATA, 0 }
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, sizeof(float) * 2, D3D11_INPUT_PER_VERTEX_DATA, 0 }
     };
 
     device->CreateInputLayout(layout, 2, vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize(), &inputLayout);
@@ -144,17 +144,39 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
     ID3D11Texture2D* texture;             
     D3D11_SAMPLER_DESC samplerDescriptor = {};
+    samplerDescriptor.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
+    samplerDescriptor.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+    samplerDescriptor.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+    samplerDescriptor.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+    samplerDescriptor.ComparisonFunc = D3D11_COMPARISON_NEVER;
+    samplerDescriptor.MinLOD = 0;
+    samplerDescriptor.MaxLOD = D3D11_FLOAT32_MAX;
+    ID3D11SamplerState* samplerState;
+   
 
     D3D11_TEXTURE2D_DESC textureDescriptor = {};
     textureDescriptor.Width = 3;
     textureDescriptor.Height = 3;
     textureDescriptor.MipLevels = 1;
     textureDescriptor.ArraySize = 1;
-    textureDescriptor.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    textureDescriptor.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    textureDescriptor.SampleDesc.Count = 1;
     textureDescriptor.Usage = D3D11_USAGE_DEFAULT;
+    textureDescriptor.BindFlags = D3D11_BIND_SHADER_RESOURCE;
 
+    device->CreateSamplerState(&samplerDescriptor, &samplerState);
     device->CreateTexture2D(&textureDescriptor, &textureSubData, &texture);
+    deviceContext->PSSetSamplers(0, 1, &samplerState);
 
+    ID3D11ShaderResourceView* resourceView;
+    D3D11_SHADER_RESOURCE_VIEW_DESC textureViewDesc = {};
+    textureViewDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    textureViewDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    textureViewDesc.Texture2D.MipLevels = 1;
+
+    device->CreateShaderResourceView(texture, &textureViewDesc, &resourceView);
+    deviceContext->PSSetShaderResources(0, 1, &resourceView);
+    
     MSG msg = {};
     while(1){
         if(PeekMessage(&msg, 0, 0, 0, PM_REMOVE)){
